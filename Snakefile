@@ -2,17 +2,24 @@ configfile:"config.yaml"
 
 rule all:
     input:
-        expand("{specimen}_1.fastq.gz", specimen= config["specimen"]),
-        expand("{specimen}_2.fastq.gz", specimen= config["specimen"]),
-        expand("trimmed_{specimen}_1.fastq.gz", specimen= config["specimen"]),
-        expand("trimmed_{specimen}_1.fastq.gz", specimen= config["specimen"]),
+        "reference.fasta",
+        expand("fastqc_reports/{specimen}_1.html",specimen= config["specimen"]),
+        expand("fastqc_reports/{specimen}_2.html",specimen= config["specimen"]),
+        expand("trimmed_{specimen}_read1.fq.gz", specimen= config["specimen"]),
+        expand("trimmed_{specimen}_read2.fq.gz", specimen= config["specimen"]),
+        "index/index.1.bt2",
+        "index/index.2.bt2",
+        "index/index.3.bt2",
+        "index/index.4.bt2",
+        "index/index.rev.1.bt2",
+        "index/index.rev.2.bt2",
         expand("aligned_files/{specimen}_sorted.bam", specimen= config["specimen"]),
         expand("aligned_files/{specimen}_sorted.bam.bai", specimen= config["specimen"])
 
 rule fastqc:
     input:
-        read1="{specimen}_1.fastq.gz",
-        read2="{specimen}_2.fastq.gz"
+        read1="reads/{specimen}_read1.fq.gz",
+        read2="reads/{specimen}_read2.fq.gz"
     output:
         "fastqc_reports/{specimen}_1.html",
         "fastqc_reports/{specimen}_2.hmtl"
@@ -23,11 +30,11 @@ rule fastqc:
 
 rule fastP:
     input:
-        read1="{specimen}_1.fastq.gz",
-        read2="{specimen}_2.fastq.gz"
+        read1="reads/{specimen}_read1.fq.gz",
+        read2="reads/{specimen}_read2.fq.gz"
     output:
-        out1="trimmed_reads/trimmed_{specimen}_1.fastq.gz",
-        out2="trimemd_reads/trimmed_{specimen}_2.fastq.gz"
+        out1="trimmed_reads/trimmed_{specimen}_read1.fq.gz",
+        out2="trimemd_reads/trimmed_{specimen}_read2.fq.gz"
     conda:
         "env.yml"
     shell:
@@ -39,28 +46,37 @@ rule bowtie2_index:
     input:
         "reference.fasta"
     params:
-        "bowtie_index/reference_index"
+        "index/index"
     output:
-        output1="bowtie_index/reference_index.1.bt2",
-        output2="bowtie_index/reference_index.2.bt2",
-        output3="bowtie_index/reference_index.3.bt2",
-        output4="bowtie_index/reference_index.4.bt2",
-        outputrev1="bowtie_index/reference_index.rev1.bt2",
-        outputrev2="bowtie_index/reference_index.rev2.bt2"
+        output1="index/index.1.bt2",
+        output2="index/index.2.bt2",
+        output3="index/index.3.bt2",
+        output4="index/index.4.bt2",
+        outputrev1="index/index.rev1.bt2",
+        outputrev2="index/index.rev2.bt2"
+    conda:
+        "sam-bam.yml"
     shell:
         "mkdir -p bowtie_index && \
         bowtie2-build {input} {params}"
 
 rule bowtie2:
     input:
-        read1="{specimen}_1.fastq.gz",
-        read2="{specimen}_2.fastq.gz"
+        "index/index.1.bt2",
+        "index/index.2.bt2",
+        "index/index.3.bt2",
+        "index/index.4.bt2",
+        "index/index.rev.1.bt2",
+        "index/index.rev.2.bt2",
+        read1="reads/{specimen}_read1.fq.gz",
+        read2="reads/{specimen}_read2.fq.gz"
+
     params:
-        "bowtie_index/reference_index"
+        "index/index"
     output:
         sam="aligned_files/{specimen}.sam"
     conda:
-        "sam-bam.env"
+        "sam-bam.yml"
     shell:
         "mkdir -p aligned_files && \
         bowtie2 -x {params} -1 {input.read1} -2 {input.read2} -S {output}"
@@ -73,8 +89,8 @@ rule samtools:
         sorted_bam="aligned_files/{specimen}_sorted.bam",
         bai="aligned_files/{specimen}_sorted.bam.bai"
     conda:
-        "sam-bam.env"
+        "sam-bam.yml"
     shell:
-        "samtools view --bam {input.sam} > {output.bam} \
-        samtools sort {output.bam} > {output.sorted_bam} \
-        samtools index {output.sorted_bam}"
+        "samtools view --bam {input.sam} |  samtools sort - > {output.sorted_bam} && \
+        samtools index {output.sorted_bam} && \
+        rm aligned_files/{wildcards.specimen}.sam"
