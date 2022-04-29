@@ -1,4 +1,6 @@
-specimen:
+gatkDir: "~/Downloads/gatk-4.2.6.1"
+reference: "reference.fasta"
+sample:
   - 1
   - 3
   - 4
@@ -14,4 +16,3 @@ specimen:
   - 36
   - 37
   - 38
-  
