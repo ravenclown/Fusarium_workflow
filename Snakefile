@@ -94,3 +94,46 @@ rule samtools:
         "samtools view --bam {input.sam} |  samtools sort - > {output.sorted_bam} && \
         samtools index {output.sorted_bam} && \
         rm aligned_files/{wildcards.specimen}.sam"
+        
+        
+#Add to config
+#gatkDir: /path/to/gatk
+
+rule MarkDuplicatesAndSortSam:
+    input:
+        "{specimen}_sorted.bam"
+    output:
+        bam="{specimen}_clean_sorted.bam"
+        metric="{specimen}_duplicate_metrics.txt"
+    conda:
+        "gatk.env"
+    shell:
+        "picard MarkDuplicates -I {input} -M {output.metric} -O {wildcards.specimen}_sorted.bam && \
+        picard SortSam -I {wildcards.specimen}_sorted.bam -O {output.bam} -SO coordinate"
+
+rule HaplotypeCaller:
+    input:
+        bam="{specimen}_clean_sorted.bam"
+        ref="reference.fasta"
+    output:
+        "{specimen}_gatk.vcf"
+    conda:
+        "gatk.env"
+    shell:
+        "{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
+
+rule SelectVariants:
+    input:
+        vcf="{specimen}_gatk.vcf"
+        ref="reference.fasta"
+    output:
+        "{specimen}_gatk_snp.vcf"
+    conda:
+        "gatk.env"
+    shell:
+        "{gatkDir}/gatk SelectVariants \
+         -R {reference} \
+         -V {input.vcf} \
+         --select-type-to-include SNP \
+         -O {output}"
+
