@@ -2,39 +2,43 @@ configfile:"config.yaml"
 
 rule all:
     input:
-        "reference.fasta",
-        expand("fastqc_reports/{specimen}_1.html",specimen= config["specimen"]),
-        expand("fastqc_reports/{specimen}_2.html",specimen= config["specimen"]),
-        expand("trimmed_{specimen}_read1.fq.gz", specimen= config["specimen"]),
-        expand("trimmed_{specimen}_read2.fq.gz", specimen= config["specimen"]),
+        "{reference}",
+        expand("fastqc_reports/{sample}_1.html",sample= config["sample"]),
+        expand("fastqc_reports/{sample}_2.html",sample= config["sample"]),
+        expand("fastqc_report/{sample}_trimmed_1.html",sample= config["sample"]),
+        expand("fastqc_report/{sample}_trimmed_2.html",sample= config["sample"])
         "index/index.1.bt2",
         "index/index.2.bt2",
         "index/index.3.bt2",
         "index/index.4.bt2",
         "index/index.rev.1.bt2",
         "index/index.rev.2.bt2",
-        expand("aligned_files/{specimen}_sorted.bam", specimen= config["specimen"]),
-        expand("aligned_files/{specimen}_sorted.bam.bai", specimen= config["specimen"])
+        expand("aligned_files/{sample}_sorted.bam", sample= config["sample"]),
+        expand("aligned_files/{sample}_sorted.bam.bai", sample= config["sample"])
 
 rule fastqc:
     input:
-        read1="reads/{specimen}_read1.fq.gz",
-        read2="reads/{specimen}_read2.fq.gz"
+        read1="reads/{sample}_read1.fq.gz",
+        read2="reads/{sample}_read2.fq.gz",
+        trim1="trimmed_reads/trimmed_{sample}_read1.fq.gz"
+        trim2="trimmed_reads/trimmed_{sample}_read2.fq.gz"
     output:
-        "fastqc_reports/{specimen}_1.html",
-        "fastqc_reports/{specimen}_2.hmtl"
+        "fastqc_reports/{sample}_1.html",
+        "fastqc_reports/{sample}_2.hmtl",
+        "fastqc_reports/{sample}_trimmed_1.html",
+        "fastqc_reports/{sample}_trimmed_2.html"
     conda:
         "env.yml"
     shell:
-        "mkdir -p fastqc_reports && fastqc {input.read1} {input.read2} -o fastqc_reports"
+        "mkdir -p fastqc_reports && fastqc {input.read1} {input.read2} {input.trim1} {input.trim2} -o fastqc_reports"
 
 rule fastP:
     input:
-        read1="reads/{specimen}_read1.fq.gz",
-        read2="reads/{specimen}_read2.fq.gz"
+        read1="reads/{sample}_read1.fq.gz",
+        read2="reads/{sample}_read2.fq.gz"
     output:
-        out1="trimmed_reads/trimmed_{specimen}_read1.fq.gz",
-        out2="trimemd_reads/trimmed_{specimen}_read2.fq.gz"
+        out1=temp("trimmed_reads/trimmed_{sample}_read1.fq.gz"),
+        out2=temp("trimemd_reads/trimmed_{sample}_read2.fq.gz")
     conda:
         "env.yml"
     shell:
@@ -44,7 +48,7 @@ rule fastP:
 
 rule bowtie2_index:
     input:
-        "reference.fasta"
+        "{reference}"
     params:
         "index/index"
     output:
@@ -68,13 +72,13 @@ rule bowtie2:
         "index/index.4.bt2",
         "index/index.rev.1.bt2",
         "index/index.rev.2.bt2",
-        read1="reads/{specimen}_read1.fq.gz",
-        read2="reads/{specimen}_read2.fq.gz"
+        read1="reads/{sample}_read1.fq.gz",
+        read2="reads/{sample}_read2.fq.gz"
 
     params:
         "index/index"
     output:
-        sam="aligned_files/{specimen}.sam"
+        sam=temp("aligned_files/{sample}.sam")
     conda:
         "sam-bam.yml"
     shell:
@@ -83,57 +87,50 @@ rule bowtie2:
 
 rule samtools:
     input:
-        sam="aligned_files/{specimen}.sam"
+        sam="aligned_files/{sample}.sam"
     output:
-        bam="aligned_files/{specimen}.bam",
-        sorted_bam="aligned_files/{specimen}_sorted.bam",
-        bai="aligned_files/{specimen}_sorted.bam.bai"
+        sorted_bam="aligned_files/{sample}_sorted.bam",
+        bai="aligned_files/{sample}_sorted.bam.bai"
     conda:
         "sam-bam.yml"
     shell:
         "samtools view --bam {input.sam} |  samtools sort - > {output.sorted_bam} && \
-        samtools index {output.sorted_bam} && \
-        rm aligned_files/{wildcards.specimen}.sam"
-        
-        
-#Add to config
-#gatkDir: /path/to/gatk
+        samtools index {output.sorted_bam}"
 
 rule MarkDuplicatesAndSortSam:
     input:
-        "{specimen}_sorted.bam"
+        "{sample}_sorted.bam"
     output:
-        bam="{specimen}_clean_sorted.bam"
-        metric="{specimen}_duplicate_metrics.txt"
+        bam="{sample}_clean_sorted.bam"
+        metric="{sample}_duplicate_metrics.txt"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
-        "picard MarkDuplicates -I {input} -M {output.metric} -O {wildcards.specimen}_sorted.bam && \
-        picard SortSam -I {wildcards.specimen}_sorted.bam -O {output.bam} -SO coordinate"
+        "picard MarkDuplicates -I {input} -M {output.metric} -O {wildcards.sample}_sorted.bam && \
+        picard SortSam -I {wildcards.sample}_sorted.bam -O {output.bam} -SO coordinate"
 
 rule HaplotypeCaller:
     input:
-        bam="{specimen}_clean_sorted.bam"
-        ref="reference.fasta"
+        bam="{sample}_clean_sorted.bam"
+        ref="{reference}"
     output:
-        "{specimen}_gatk.vcf"
+        "{sample}_gatk.vcf"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         "{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
 
 rule SelectVariants:
     input:
-        vcf="{specimen}_gatk.vcf"
-        ref="reference.fasta"
+        vcf="{sample}_gatk.vcf"
+        ref="{reference}"
     output:
-        "{specimen}_gatk_snp.vcf"
+        "{sample}_gatk_snp.vcf"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         "{gatkDir}/gatk SelectVariants \
          -R {reference} \
          -V {input.vcf} \
          --select-type-to-include SNP \
          -O {output}"
-
