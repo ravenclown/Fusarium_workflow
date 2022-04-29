@@ -1,12 +1,11 @@
 configfile:"config.yaml"
-
 rule all:
     input:
-        "{reference}",
+        "reference.fasta",
         expand("fastqc_reports/{sample}_1.html",sample= config["sample"]),
         expand("fastqc_reports/{sample}_2.html",sample= config["sample"]),
         expand("fastqc_report/{sample}_trimmed_1.html",sample= config["sample"]),
-        expand("fastqc_report/{sample}_trimmed_2.html",sample= config["sample"])
+        expand("fastqc_report/{sample}_trimmed_2.html",sample= config["sample"]),
         "index/index.1.bt2",
         "index/index.2.bt2",
         "index/index.3.bt2",
@@ -14,13 +13,16 @@ rule all:
         "index/index.rev.1.bt2",
         "index/index.rev.2.bt2",
         expand("aligned_files/{sample}_sorted.bam", sample= config["sample"]),
-        expand("aligned_files/{sample}_sorted.bam.bai", sample= config["sample"])
+        expand("aligned_files/{sample}_sorted.bam.bai", sample= config["sample"]),
+        expand("aligned_files/{sample}_gatk.vcf", sample= config["sample"]),
+        expand("aligned_files/{sample}_gatk_snp.vcf", sample= config["sample"])
+
 
 rule fastqc:
     input:
         read1="reads/{sample}_read1.fq.gz",
         read2="reads/{sample}_read2.fq.gz",
-        trim1="trimmed_reads/trimmed_{sample}_read1.fq.gz"
+        trim1="trimmed_reads/trimmed_{sample}_read1.fq.gz",
         trim2="trimmed_reads/trimmed_{sample}_read2.fq.gz"
     output:
         "fastqc_reports/{sample}_1.html",
@@ -48,7 +50,7 @@ rule fastP:
 
 rule bowtie2_index:
     input:
-        "{reference}"
+        "reference.fasta"
     params:
         "index/index"
     output:
@@ -74,7 +76,6 @@ rule bowtie2:
         "index/index.rev.2.bt2",
         read1="reads/{sample}_read1.fq.gz",
         read2="reads/{sample}_read2.fq.gz"
-
     params:
         "index/index"
     output:
@@ -101,7 +102,7 @@ rule MarkDuplicatesAndSortSam:
     input:
         "{sample}_sorted.bam"
     output:
-        bam="{sample}_clean_sorted.bam"
+        bam="{sample}_clean_sorted.bam",
         metric="{sample}_duplicate_metrics.txt"
     conda:
         "gatk.yml"
@@ -111,26 +112,26 @@ rule MarkDuplicatesAndSortSam:
 
 rule HaplotypeCaller:
     input:
-        bam="{sample}_clean_sorted.bam"
-        ref="{reference}"
+        bam="{sample}_clean_sorted.bam",
+        ref="reference.fasta"
     output:
         "{sample}_gatk.vcf"
     conda:
         "gatk.yml"
     shell:
-        "{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
+        "./{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
 
 rule SelectVariants:
     input:
-        vcf="{sample}_gatk.vcf"
-        ref="{reference}"
+        vcf="{sample}_gatk.vcf",
+        ref="reference.fasta"
     output:
         "{sample}_gatk_snp.vcf"
     conda:
         "gatk.yml"
     shell:
-        "{gatkDir}/gatk SelectVariants \
-         -R {reference} \
+        "./{gatkDir}/gatk SelectVariants \
+         -R reference.fasta \
          -V {input.vcf} \
          --select-type-to-include SNP \
          -O {output}"
