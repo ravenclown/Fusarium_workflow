@@ -17,7 +17,6 @@ rule all:
         expand("aligned_files/{sample}_gatk.vcf", sample= config["sample"]),
         expand("aligned_files/{sample}_gatk_snp.vcf", sample= config["sample"])
 
-
 rule fastqc:
     input:
         read1="reads/{sample}_read1.fq.gz",
@@ -104,16 +103,18 @@ rule PrepareReference:
     output:
         dict="reference.dict",
         fai="reference.fasta.fai"
+    conda:
+        "gatk.env"
     shell:
-        "./gatk-4.2.6.1/gatk CreateSequenceDictionary -R {input} && \
+        ".{gatkDir}/gatk CreateSequenceDictionary -R {input} && \
         samtools faidx {input}"
-        
+
 rule MarkDuplicates:
     input:
-        "{specimen}_sorted.bam"
+        "{sample}_sorted.bam"
     output:
-        md=temp("{specimen}_MD.bam"),
-        metric="{specimen}_duplicate_metrics.txt"
+        md=temp("{sample}_MD.bam"),
+        metric="{sample}_duplicate_metrics.txt"
     conda:
         "gatk.env"
     shell:
@@ -121,28 +122,30 @@ rule MarkDuplicates:
 
 rule SortSam:
     input:
-        "{specimen}_MD.bam"
+        "{sample}_MD.bam"
     output:
-        bam="{specimen}_clean_sorted.bam"
+        bam="{sample}_clean_sorted.bam"
+    conda:
+        "gatk.env"
     shell:
         "picard SortSam -I {input} -O {output.bam} -SO coordinate"
 
 rule HaplotypeCaller:
     input:
-        bam="{specimen}_clean_sorted.bam",
+        bam="{sample}_clean_sorted.bam",
         ref="reference.fasta",
         dict="reference.dict",
         fai="reference.fasta.fai"
     output:
-        "{specimen}_gatk.vcf"
+        "{sample}_gatk.vcf"
     conda:
         "gatk.env"
     shell:
-        "./gatk-4.2.6.1/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
+        ".{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
 
 rule SelectVariants:
     input:
-        vcf="{specimen}_gatk.vcf",
+        vcf="{sample}_gatk.vcf",
         ref="reference.fasta",
         dict="reference.dict",
         fai="reference.fasta.fai"
@@ -151,7 +154,7 @@ rule SelectVariants:
     conda:
         "gatk.env"
     shell:
-        "./gatk-4.2.6.1/gatk SelectVariants \
+        ".{gatkDir}/gatk SelectVariants \
          -R {input.ref} \
          -V {input.vcf} \
          --select-type-to-include SNP \
