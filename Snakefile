@@ -98,40 +98,61 @@ rule samtools:
         "samtools view --bam {input.sam} |  samtools sort - > {output.sorted_bam} && \
         samtools index {output.sorted_bam}"
 
-rule MarkDuplicatesAndSortSam:
+rule PrepareReference:
     input:
-        "{sample}_sorted.bam"
+        "reference.fasta"
     output:
-        bam="{sample}_clean_sorted.bam",
-        metric="{sample}_duplicate_metrics.txt"
-    conda:
-        "gatk.yml"
+        dict="reference.dict",
+        fai="reference.fasta.fai"
     shell:
-        "picard MarkDuplicates -I {input} -M {output.metric} -O {wildcards.sample}_sorted.bam && \
-        picard SortSam -I {wildcards.sample}_sorted.bam -O {output.bam} -SO coordinate"
+        "./gatk-4.2.6.1/gatk CreateSequenceDictionary -R {input} && \
+        samtools faidx {input}"
+        
+rule MarkDuplicates:
+    input:
+        "{specimen}_sorted.bam"
+    output:
+        md=temp("{specimen}_MD.bam"),
+        metric="{specimen}_duplicate_metrics.txt"
+    conda:
+        "gatk.env"
+    shell:
+        "picard MarkDuplicates -I {input} -M {output.metric} -O {output.md}"
+
+rule SortSam:
+    input:
+        "{specimen}_MD.bam"
+    output:
+        bam="{specimen}_clean_sorted.bam"
+    shell:
+        "picard SortSam -I {input} -O {output.bam} -SO coordinate"
 
 rule HaplotypeCaller:
     input:
-        bam="{sample}_clean_sorted.bam",
-        ref="reference.fasta"
+        bam="{specimen}_clean_sorted.bam",
+        ref="reference.fasta",
+        dict="reference.dict",
+        fai="reference.fasta.fai"
     output:
-        "{sample}_gatk.vcf"
+        "{specimen}_gatk.vcf"
     conda:
-        "gatk.yml"
+        "gatk.env"
     shell:
-        "./{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
+        "./gatk-4.2.6.1/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
 
 rule SelectVariants:
     input:
-        vcf="{sample}_gatk.vcf",
-        ref="reference.fasta"
+        vcf="{specimen}_gatk.vcf",
+        ref="reference.fasta",
+        dict="reference.dict",
+        fai="reference.fasta.fai"
     output:
         "{sample}_gatk_snp.vcf"
     conda:
-        "gatk.yml"
+        "gatk.env"
     shell:
-        "./{gatkDir}/gatk SelectVariants \
-         -R reference.fasta \
+        "./gatk-4.2.6.1/gatk SelectVariants \
+         -R {input.ref} \
          -V {input.vcf} \
          --select-type-to-include SNP \
          -O {output}"
