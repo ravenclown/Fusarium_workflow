@@ -17,6 +17,7 @@ rule all:
         expand("aligned_files/{sample}_gatk.vcf", sample= config["sample"]),
         expand("aligned_files/{sample}_gatk_snp.vcf", sample= config["sample"])
 
+
 rule fastqc:
     input:
         read1="reads/{sample}_read1.fq.gz",
@@ -104,7 +105,7 @@ rule PrepareReference:
         dict="reference.dict",
         fai="reference.fasta.fai"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         ".{gatkDir}/gatk CreateSequenceDictionary -R {input} && \
         samtools faidx {input}"
@@ -116,7 +117,7 @@ rule MarkDuplicates:
         md=temp("{sample}_MD.bam"),
         metric="{sample}_duplicate_metrics.txt"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         "picard MarkDuplicates -I {input} -M {output.metric} -O {output.md}"
 
@@ -126,20 +127,32 @@ rule SortSam:
     output:
         bam="{sample}_clean_sorted.bam"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         "picard SortSam -I {input} -O {output.bam} -SO coordinate"
 
+rule AddReadGroup:
+    input:
+        sorted_bam="{sample}_clean_sorted.bam"
+    output:
+        sorted_rg_bam="{sample}_clean_sorted_with_rg.bam"
+    conda:
+        "gatk.yml"
+    shell:
+        "picard AddOrReplaceReadGroups -I {input.sorted_bam} -O {output.sorted_rg_bam} \
+        -LB {wildcards.sample} -PL illumina -PU null -SM {wildcards.sample} && \
+        samtools index {output.sorted_rg_bam}"
+
 rule HaplotypeCaller:
     input:
-        bam="{sample}_clean_sorted.bam",
+        bam="{sample}_clean_sorted_with_rg.bam",
         ref="reference.fasta",
         dict="reference.dict",
         fai="reference.fasta.fai"
     output:
         "{sample}_gatk.vcf"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         ".{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
 
@@ -152,7 +165,7 @@ rule SelectVariants:
     output:
         "{sample}_gatk_snp.vcf"
     conda:
-        "gatk.env"
+        "gatk.yml"
     shell:
         ".{gatkDir}/gatk SelectVariants \
          -R {input.ref} \
