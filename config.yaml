@@ -1,5 +1,5 @@
 gatkDir: "~/path/to/gatk"
-reference: "reference.fasta"
+reference: "~/path/to/reference.fasta"
 sample:
   - sample1
   - sample2
