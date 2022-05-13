@@ -14,8 +14,8 @@ rule all:
         "index/index.rev.2.bt2",
         expand("aligned_files/{sample}_sorted.bam", sample= config["sample"]),
         expand("aligned_files/{sample}_sorted.bam.bai", sample= config["sample"]),
-        expand("aligned_files/{sample}_gatk.vcf", sample= config["sample"]),
-        expand("aligned_files/{sample}_gatk_snp.vcf", sample= config["sample"])
+        expand("VCF/{sample}_gatk.vcf", sample= config["sample"]),
+        expand("VCF/{sample}_gatk_snp.vcf", sample= config["sample"])
 
 
 rule fastqc:
