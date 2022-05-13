@@ -107,25 +107,26 @@ rule PrepareReference:
     conda:
         "gatk.yml"
     shell:
-        ".{gatkDir}/gatk CreateSequenceDictionary -R {input} && \
+        "{gatkDir}/gatk CreateSequenceDictionary -R {input} && \
         samtools faidx {input}"
 
 rule MarkDuplicates:
     input:
-        "{sample}_sorted.bam"
+        "aligned_files/{sample}_sorted.bam"
     output:
-        md=temp("{sample}_MD.bam"),
-        metric="{sample}_duplicate_metrics.txt"
+        md=temp("aligned_files/{sample}_MD.bam"),
+        metric="MD_metrics/{sample}_duplicate_metrics.txt"
     conda:
         "gatk.yml"
     shell:
-        "picard MarkDuplicates -I {input} -M {output.metric} -O {output.md}"
+        "mkdir -p MD_metrics && \
+        picard MarkDuplicates -I {input} -M {output.metric} -O {output.md}"
 
 rule SortSam:
     input:
-        "{sample}_MD.bam"
+        "aligned_files/{sample}_MD.bam"
     output:
-        bam="{sample}_clean_sorted.bam"
+        bam="aligned_files/{sample}_clean_sorted.bam"
     conda:
         "gatk.yml"
     shell:
@@ -133,9 +134,9 @@ rule SortSam:
 
 rule AddReadGroup:
     input:
-        sorted_bam="{sample}_clean_sorted.bam"
+        sorted_bam="aligned_files/{sample}_clean_sorted.bam"
     output:
-        sorted_rg_bam="{sample}_clean_sorted_with_rg.bam"
+        sorted_rg_bam="aligned_files/{sample}_clean_sorted_with_rg.bam"
     conda:
         "gatk.yml"
     shell:
@@ -145,29 +146,30 @@ rule AddReadGroup:
 
 rule HaplotypeCaller:
     input:
-        bam="{sample}_clean_sorted_with_rg.bam",
+        bam="aligned_files/{sample}_clean_sorted_with_rg.bam",
         ref="reference.fasta",
         dict="reference.dict",
         fai="reference.fasta.fai"
     output:
-        "{sample}_gatk.vcf"
+        "VCF/{sample}_gatk.vcf"
     conda:
         "gatk.yml"
     shell:
-        ".{gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
+        "mkdir -p VCF && \ 
+        {gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
 
 rule SelectVariants:
     input:
-        vcf="{sample}_gatk.vcf",
+        vcf="VCF/{sample}_gatk.vcf",
         ref="reference.fasta",
         dict="reference.dict",
         fai="reference.fasta.fai"
     output:
-        "{sample}_gatk_snp.vcf"
+        "VCF/{sample}_gatk_snp.vcf"
     conda:
         "gatk.yml"
     shell:
-        ".{gatkDir}/gatk SelectVariants \
+        "{gatkDir}/gatk SelectVariants \
          -R {input.ref} \
          -V {input.vcf} \
          --select-type-to-include SNP \
