@@ -157,15 +157,29 @@ rule HaplotypeCaller:
     shell:
         "mkdir -p VCF && \ 
         {gatkDir}/gatk HaplotypeCaller -I {input.bam} -R {input.ref} -O {output} -ploidy 1"
-
+        
+rule VariantFiltration:
+    input:
+        vcf="VCF/{sample}_gatk.vcf"
+    output:
+        "VCF/{sample}_filtered_gatk.vcf"
+    conda:
+        "gatk.yml"
+    shell:
+        "{gatkDir}/gatk VariantFiltration \
+        -V {input.vcf} \
+        -O {output} \
+        -filter "QD<2.0 && AF<1.0 && FS>6.0 && MQ<40.0 && MQRankSum<-12.5 && ReadPosRankSum<-8.0" \
+        --filter-name "my_filter"
+        
 rule SelectVariants:
     input:
-        vcf="VCF/{sample}_gatk.vcf",
+        vcf="VCF/{sample}_filtered_gatk.vcf",
         ref="reference.fasta",
         dict="reference.dict",
         fai="reference.fasta.fai"
     output:
-        "VCF/{sample}_gatk_snp.vcf"
+        "VCF/{sample}_filtered_gatk_snp.vcf"
     conda:
         "gatk.yml"
     shell:
